@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Teorema de Earnshaw - Simulación Interactiva</title>
+    
+    <!-- Cargar PyScript desde la CDN (oficial) -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2026.3.1/core.css" />
+    <script type="module" src="https://pyscript.net/releases/2026.3.1/core.js"></script>
+    
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        #plot-container { margin: 0 auto; width: 100%; max-width: 1000px; }
+        .instructions { background: #f0f0f0; padding: 10px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Teorema de Earnshaw</h1>
+    <div class="instructions">
+        <p><strong>Instrucciones:</strong> Haz clic en cualquier punto del gráfico para soltar la carga de prueba.</p>
+        <p>🔴 El punto medio (0,0) es un <strong>punto de silla inestable</strong> — la carga saldrá disparada.</p>
+    </div>
+    <div id="plot-container"></div>
+
+    <!-- Configurar paquetes necesarios -->
+    <py-config>
+        packages = ["numpy", "matplotlib", "scipy"]
+    </py-config>
+
+    <py-script>
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from scipy.integrate import odeint
+        from matplotlib.animation import FuncAnimation
+        import js
+
+        # Aquí va TODO tu código de simulación
+        # (campo_electrico, ecuaciones_movimiento, etc.)
+        
+        # Al final, mostrar la figura
+        plt.show()
+    </py-script>
+</body>
+</html>
