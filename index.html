@@ -28,6 +28,9 @@
     </py-config>
 
     <py-script>
+
+        import micropip
+        await micropip.install("scipy")
         import numpy as np
         import matplotlib.pyplot as plt
         from matplotlib.animation import FuncAnimation
