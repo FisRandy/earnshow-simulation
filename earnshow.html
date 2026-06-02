@@ -29,16 +29,303 @@
     </py-config>
 
     <py-script>
-        import matplotlib.pyplot as plt
         import numpy as np
-        from scipy.integrate import odeint
+        import matplotlib.pyplot as plt
         from matplotlib.animation import FuncAnimation
-        import js
+        from scipy.integrate import odeint
+        from matplotlib.patches import Patch
 
-        # Aquí va TODO tu código de simulación
-        # (campo_electrico, ecuaciones_movimiento, etc.)
-        
-        # Al final, mostrar la figura
+        k = 8.99e9  # N·m²/C² (constante de Coulomb)
+
+        q1 = 100.0e-9  # Carga izquierda (nC)
+        q2 = 100.0e-9  # Carga derecha (nC)
+        q_test = 2.0e-9  # Carga de prueba (nC)
+        m = 1.0e-6  # Masa (kg)
+        d = 1.0  # Distancia entre cargas fijas (metros)
+
+        # Posiciones de las cargas fijas
+        pos1 = np.array([-d / 2, 0.0])
+        pos2 = np.array([d / 2, 0.0])
+
+        # Límites de la gráfica
+        x_lim = (-3, 3)
+        y_lim = (-2, 2)
+
+        # Variables globales
+        running = False
+        trayectoria_data = None
+        idx_actual = 0
+        t_max_sim = 12
+        dt_sim = 0.02
+        traza_x = []
+        traza_y = []
+
+
+        def campo_electrico(x, y):
+            """Calcula campo eléctrico en (x, y) - unidades: N/C"""
+            rx1 = x - pos1[0]
+            ry1 = y - pos1[1]
+            rx2 = x - pos2[0]
+            ry2 = y - pos2[1]
+
+            r1 = np.sqrt(rx1 ** 2 + ry1 ** 2) + 1e-8
+            r2 = np.sqrt(rx2 ** 2 + ry2 ** 2) + 1e-8
+
+            Ex = k * q1 * rx1 / r1 ** 3 + k * q2 * rx2 / r2 ** 3
+            Ey = k * q1 * ry1 / r1 ** 3 + k * q2 * ry2 / r2 ** 3
+
+            return Ex, Ey
+
+
+        def ecuaciones_movimiento(estado, t):
+            """Ecuaciones de movimiento: F = qE = m*a"""
+            x, y, vx, vy = estado
+            Ex, Ey = campo_electrico(x, y)
+            ax = q_test * Ex / m
+            ay = q_test * Ey / m
+            return [vx, vy, ax, ay]
+
+
+        def calcular_trayectoria(x0, y0):
+            """Calcula la trayectoria desde una posición inicial"""
+            t = np.arange(0, t_max_sim, dt_sim)
+            estado0 = [x0, y0, 0.0, 0.0]
+            sol = odeint(ecuaciones_movimiento, estado0, t)
+            return t, sol[:, 0], sol[:, 1]
+
+
+        def iniciar_simulacion(x0, y0):
+            """Inicia la simulación desde (x0, y0)"""
+            global running, trayectoria_data, idx_actual, traza_x, traza_y, t_sim, x_sim, y_sim
+
+            t_sim, x_sim, y_sim = calcular_trayectoria(x0, y0)
+            trayectoria_data = (t_sim, x_sim, y_sim)
+            idx_actual = 0
+            traza_x = [x_sim[0]]
+            traza_y = [y_sim[0]]
+            running = True
+
+            punto_test.set_data([x_sim[0]], [y_sim[0]])
+            linea_trayectoria.set_data(traza_x, traza_y)
+            ax.set_title(f'Campo electrostático | Carga en ({x0:.2f} m, {y0:.2f} m) | En movimiento...')
+
+            return t_sim, x_sim, y_sim
+
+
+        def actualizar(frame):
+            """Actualiza la animación"""
+            global running, idx_actual, traza_x, traza_y
+
+            if running and trayectoria_data is not None:
+                t, x, y = trayectoria_data
+                idx_actual += 1
+
+                if idx_actual < len(t):
+                    punto_test.set_data([x[idx_actual]], [y[idx_actual]])
+                    traza_x.append(x[idx_actual])
+                    traza_y.append(y[idx_actual])
+                    linea_trayectoria.set_data(traza_x, traza_y)
+
+                    if idx_actual > 0:
+                        dt = t[idx_actual] - t[idx_actual - 1]
+                        vx = (x[idx_actual] - x[idx_actual - 1]) / dt if dt > 0 else 0
+                        vy = (y[idx_actual] - y[idx_actual - 1]) / dt if dt > 0 else 0
+                        v = np.sqrt(vx ** 2 + vy ** 2)
+                        ax.set_title(
+                            f'Campo electrostático | Pos: ({x[idx_actual]:.2f} m, {y[idx_actual]:.2f} m) | v = {v:.2f} m/s')
+                else:
+                    running = False
+                    ax.set_title('Campo electrostático | Simulación terminada (Haz clic para reiniciar)')
+
+            return punto_test, linea_trayectoria
+
+
+        def on_click(event):
+            """Maneja clics del mouse"""
+            global running, traza_x, traza_y
+
+            if event.inaxes == ax and event.xdata is not None and event.ydata is not None:
+                running = False
+                traza_x = []
+                traza_y = []
+                linea_trayectoria.set_data([], [])
+                iniciar_simulacion(event.xdata, event.ydata)
+
+
+        # ============================================================
+        # CONFIGURACIÓN DE LA FIGURA
+        # ============================================================
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+        fig.canvas.manager.set_window_title('Teorema de Earnshaw - Simulación Interactiva')
+
+        # Crear malla para el potencial
+        nx, ny = 200, 150
+        x_grid = np.linspace(x_lim[0], x_lim[1], nx)
+        y_grid = np.linspace(y_lim[0], y_lim[1], ny)
+        X, Y = np.meshgrid(x_grid, y_grid)
+
+        # Calcular potencial
+        r1 = np.sqrt((X + d / 2) ** 2 + Y ** 2) + 1e-8
+        r2 = np.sqrt((X - d / 2) ** 2 + Y ** 2) + 1e-8
+        V = k * q1 / r1 + k * q2 / r2
+
+        # Graficar potencial
+        im = ax.contourf(X, Y, V, levels=60, cmap='RdYlBu_r', alpha=0.85)
+        contour = ax.contour(X, Y, V, levels=15, colors='black', linewidths=0.4, alpha=0.5)
+
+        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+        cbar.set_label('Potencial eléctrico (V)', rotation=270, labelpad=20, fontsize=10)
+
+        # ============================================================
+        # LÍNEAS DE CAMPO ELÉCTRICO
+        # ============================================================
+
+        seeds_x = []
+        seeds_y = []
+
+        # Semillas alrededor de las cargas
+        for angle in np.linspace(0, 2 * np.pi, 24):
+            seeds_x.append(pos1[0] + 0.25 * np.cos(angle))
+            seeds_y.append(pos1[1] + 0.25 * np.sin(angle))
+            seeds_x.append(pos2[0] + 0.25 * np.cos(angle))
+            seeds_y.append(pos2[1] + 0.25 * np.sin(angle))
+
+
+        def campo_normalizado(x, y):
+            Ex, Ey = campo_electrico(x, y)
+            E_mag = np.hypot(Ex, Ey)
+            if E_mag > 0:
+                return Ex / E_mag, Ey / E_mag
+            return 0, 0
+
+
+        def trace_field_line(x0, y0, steps=300, step_size=0.02):
+            x_pts, y_pts = [x0], [y0]
+            x, y = x0, y0
+            for _ in range(steps):
+                Ex, Ey = campo_normalizado(x, y)
+                x_new = x + Ex * step_size
+                y_new = y + Ey * step_size
+                if x_new < x_lim[0] or x_new > x_lim[1] or y_new < y_lim[0] or y_new > y_lim[1]:
+                    break
+                x_pts.append(x_new)
+                y_pts.append(y_new)
+                x, y = x_new, y_new
+            return x_pts, y_pts
+
+
+        # Trazar líneas de campo
+        for sx, sy in zip(seeds_x, seeds_y):
+            xp, yp = trace_field_line(sx, sy)
+            ax.plot(xp, yp, 'white', linewidth=0.8, alpha=0.4, zorder=1)
+            xp, yp = trace_field_line(sx, sy, step_size=-0.02)
+            ax.plot(xp, yp, 'white', linewidth=0.8, alpha=0.4, zorder=1)
+
+        # ============================================================
+        # VECTORES DE CAMPO (VERSIÓN CORREGIDA - USANDO flatten)
+        # ============================================================
+
+        # Crear puntos para las flechas (malla regular)
+        arrow_x = np.linspace(x_lim[0] + 0.3, x_lim[1] - 0.3, 18)
+        arrow_y = np.linspace(y_lim[0] + 0.2, y_lim[1] - 0.2, 12)
+
+        # Crear malla de puntos
+        AX, AY = np.meshgrid(arrow_x, arrow_y)
+
+        # Aplanar para iterar fácilmente
+        points_x = AX.flatten()
+        points_y = AY.flatten()
+
+        # Dibujar flechas en cada punto
+        for px, py in zip(points_x, points_y):
+            Ex, Ey = campo_electrico(px, py)
+            E_mag = np.hypot(Ex, Ey)
+
+            if E_mag > 1e-6:
+                # Normalizar para tamaño uniforme
+                u = Ex / E_mag
+                v = Ey / E_mag
+
+                # Intensidad para el color (normalizada)
+                intensity = min(1.0, E_mag / 5000)
+                color = plt.cm.plasma(intensity)
+
+                ax.arrow(px, py, u * 0.12, v * 0.12,
+                        head_width=0.05, head_length=0.06,
+                        fc=color, ec=color, alpha=0.7, zorder=2,
+                        length_includes_head=True)
+
+        # ============================================================
+        # CARGAS FIJAS
+        # ============================================================
+
+        ax.plot(pos1[0], pos1[1], 'o', markersize=22, color='red', markeredgecolor='darkred', markeredgewidth=2, zorder=5)
+        ax.plot(pos2[0], pos2[1], 'o', markersize=22, color='red', markeredgecolor='darkred', markeredgewidth=2, zorder=5)
+        ax.text(pos1[0], pos1[1] - 0.18, '+', fontsize=16, ha='center', va='center', fontweight='bold', color='white', zorder=6)
+        ax.text(pos2[0], pos2[1] - 0.18, '+', fontsize=16, ha='center', va='center', fontweight='bold', color='white', zorder=6)
+
+        # ============================================================
+        # PUNTO DE EQUILIBRIO INESTABLE
+        # ============================================================
+
+        ax.plot(0, 0, 'ko', markersize=6, alpha=0.6, zorder=5)
+        ax.text(0, 0.15, 'Punto de silla', fontsize=8, ha='center', va='bottom', alpha=0.7)
+
+        # ============================================================
+        # CARGA DE PRUEBA Y TRAYECTORIA
+        # ============================================================
+
+        punto_test, = ax.plot([], [], 'o', markersize=14, color='lime', markeredgecolor='darkgreen', markeredgewidth=2,
+                            zorder=10)
+        linea_trayectoria, = ax.plot([], [], '-', color='lime', linewidth=2, alpha=0.9, zorder=8)
+
+        # ============================================================
+        # CONFIGURACIÓN DE EJES
+        # ============================================================
+
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+        ax.set_xlabel('x (m)', fontsize=12)
+        ax.set_ylabel('y (m)', fontsize=12)
+        ax.set_title('Teorema de Earnshaw - Demostración de inestabilidad | Haz clic para soltar la carga', fontsize=11,
+                    fontweight='bold')
+
+        ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.5, color='gray')
+        ax.set_facecolor('#f8f9fa')
+        ax.axhline(0, color='gray', linewidth=0.8, alpha=0.4)
+        ax.axvline(0, color='gray', linewidth=0.8, alpha=0.4)
+
+        # Ticks
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.xaxis.set_minor_locator(plt.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(plt.MultipleLocator(0.5))
+
+        # ============================================================
+        # LEYENDA
+        # ============================================================
+
+        legend_elements = [
+            Patch(facecolor='red', edgecolor='darkred', label='Carga fija positiva (+)'),
+            Patch(facecolor='lime', edgecolor='darkgreen', label='Carga de prueba'),
+            plt.Line2D([0], [0], color='white', linewidth=1, label='Líneas de campo')
+        ]
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=8, framealpha=0.9)
+
+        # ============================================================
+        # INICIAR
+        # ============================================================
+
+        fig.canvas.mpl_connect('button_press_event', on_click)
+
+        t_sim = None
+        x_sim = None
+        y_sim = None
+
+        ani = FuncAnimation(fig, actualizar, interval=30, blit=False, cache_frame_data=False)
+
+        plt.tight_layout()
         plt.show()
     </py-script>
 </body>
