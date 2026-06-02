@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Teorema de Earnshaw - Simulación Interactiva</title>
     
-    <!-- PyScript versión estable (más rápida) -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     
@@ -24,33 +23,30 @@
     <div class="loading" id="loading-msg">Cargando simulación... (30-60 segundos la primera vez)</div>
 
     <py-config>
-        packages = ["numpy", "matplotlib"]
+        packages = ["numpy", "matplotlib", "scipy"]
     </py-config>
 
     <py-script>
-
-        import micropip
-        micropip.install("scipy")
+        import asyncio
         import numpy as np
         import matplotlib.pyplot as plt
         from matplotlib.animation import FuncAnimation
         from matplotlib.patches import Patch
         from scipy.integrate import odeint
-        import asyncio
 
         # Ocultar mensaje de carga
         from js import document
         document.getElementById("loading-msg").style.display = "none"
 
         # ============================================================
-        # PARÁMETROS FÍSICOS (optimizados para rendimiento)
+        # PARÁMETROS FÍSICOS
         # ============================================================
         k = 8.99e9
-        q1 = 4.0e-9      # Reducido para mejor visualización
+        q1 = 4.0e-9
         q2 = 4.0e-9
         q_test = 1.0e-9
         m = 1.0e-6
-        d = 2.0          # Aumentado para mejor separación
+        d = 2.0
 
         pos1 = np.array([-d/2, 0.0])
         pos2 = np.array([d/2, 0.0])
@@ -64,32 +60,25 @@
         trayectoria_data = None
 
         # ============================================================
-        # FUNCIONES PRINCIPALES (optimizadas)
+        # FUNCIONES
         # ============================================================
         def campo_electrico(x, y):
-            """Vectorizado y optimizado"""
             rx1 = x - pos1[0]
             ry1 = y - pos1[1]
             rx2 = x - pos2[0]
             ry2 = y - pos2[1]
-            
-            # Usar hypot para mejor precisión y velocidad
             r1 = np.hypot(rx1, ry1) + 1e-8
             r2 = np.hypot(rx2, ry2) + 1e-8
-            
-            # Cálculo vectorizado
             Ex = k * (q1 * rx1 / r1**3 + q2 * rx2 / r2**3)
             Ey = k * (q1 * ry1 / r1**3 + q2 * ry2 / r2**3)
             return Ex, Ey
 
         def calcular_trayectoria(x0, y0):
-            """Optimizado: menos puntos para animación más rápida"""
-            t = np.arange(0, 10, 0.03)  # Menos puntos = más rápido
+            t = np.arange(0, 10, 0.03)
             def ec_mov(estado, t):
                 x, y, vx, vy = estado
                 Ex, Ey = campo_electrico(x, y)
                 return [vx, vy, q_test*Ex/m, q_test*Ey/m]
-            
             sol = odeint(ec_mov, [x0, y0, 0, 0], t)
             return t, sol[:,0], sol[:,1]
 
@@ -114,8 +103,6 @@
                     traza_x.append(x[idx_actual])
                     traza_y.append(y[idx_actual])
                     linea_trayectoria.set_data(traza_x, traza_y)
-                    
-                    # Velocidad (cada 10 frames para optimizar)
                     if idx_actual % 10 == 0 and idx_actual > 0:
                         dt = t[idx_actual] - t[idx_actual-1]
                         v = np.hypot(x[idx_actual]-x[idx_actual-1], y[idx_actual]-y[idx_actual-1]) / dt
@@ -134,12 +121,12 @@
                 iniciar_simulacion(event.xdata, event.ydata)
 
         # ============================================================
-        # FIGURA PRINCIPAL (mallas optimizadas)
+        # FIGURA PRINCIPAL
         # ============================================================
         fig, ax = plt.subplots(figsize=(11, 7))
 
-        # Malla para potencial (menos puntos = más rápido)
-        nx, ny = 120, 80  # Reducido de 200,150
+        # Malla para potencial
+        nx, ny = 120, 80
         x_grid = np.linspace(x_lim[0], x_lim[1], nx)
         y_grid = np.linspace(y_lim[0], y_lim[1], ny)
         X, Y = np.meshgrid(x_grid, y_grid)
@@ -148,18 +135,17 @@
         r2 = np.hypot(X - d/2, Y) + 1e-8
         V = k * (q1 / r1 + q2 / r2)
 
-        # Gráficos
         im = ax.contourf(X, Y, V, levels=40, cmap='RdYlBu_r', alpha=0.85)
         ax.contour(X, Y, V, levels=10, colors='black', linewidths=0.3, alpha=0.4)
         plt.colorbar(im, ax=ax, shrink=0.8).set_label('Potencial (V)', rotation=270, labelpad=15)
 
-        # Líneas de campo (menos semillas = más rápido)
+        # Líneas de campo
         seeds = []
-        for angle in np.linspace(0, 2*np.pi, 16):  # Reducido de 24
+        for angle in np.linspace(0, 2*np.pi, 16):
             seeds.append((pos1[0] + 0.25*np.cos(angle), pos1[1] + 0.25*np.sin(angle)))
             seeds.append((pos2[0] + 0.25*np.cos(angle), pos2[1] + 0.25*np.sin(angle)))
 
-        def trace_line(x0, y0, steps=200, step=0.02):  # Reducido steps
+        def trace_line(x0, y0, steps=200, step=0.02):
             pts_x, pts_y = [x0], [y0]
             x, y = x0, y0
             for _ in range(steps):
@@ -174,15 +160,14 @@
                         break
             return pts_x, pts_y
 
-        # Dibujar líneas (ambas direcciones)
         for sx, sy in seeds:
             xp, yp = trace_line(sx, sy)
             ax.plot(xp, yp, 'white', linewidth=0.6, alpha=0.3, zorder=1)
             xp, yp = trace_line(sx, sy, step=-0.02)
             ax.plot(xp, yp, 'white', linewidth=0.6, alpha=0.3, zorder=1)
 
-        # Flechas de campo (menos flechas = más rápido)
-        arrow_x = np.linspace(x_lim[0]+0.4, x_lim[1]-0.4, 14)  # Reducido
+        # Flechas de campo
+        arrow_x = np.linspace(x_lim[0]+0.4, x_lim[1]-0.4, 14)
         arrow_y = np.linspace(y_lim[0]+0.3, y_lim[1]-0.3, 10)
         for px in arrow_x:
             for py in arrow_y:
@@ -208,7 +193,7 @@
         punto_test, = ax.plot([], [], 'o', markersize=12, color='lime', markeredgecolor='darkgreen', markeredgewidth=2, zorder=10)
         linea_trayectoria, = ax.plot([], [], '-', color='lime', linewidth=1.5, alpha=0.8, zorder=8)
 
-        # Configuración de ejes
+        # Configuración
         ax.set_xlim(x_lim); ax.set_ylim(y_lim)
         ax.set_xlabel('x (m)'); ax.set_ylabel('y (m)')
         ax.set_title('Teorema de Earnshaw - Haz clic para soltar la carga')
@@ -217,7 +202,6 @@
         ax.axvline(0, color='gray', alpha=0.3)
         ax.set_facecolor('#f8f9fa')
 
-        # Leyenda
         legend_elements = [
             plt.Line2D([0], [0], marker='o', color='red', label='Carga fija (+)', markersize=8, linestyle='None'),
             plt.Line2D([0], [0], marker='o', color='lime', label='Carga de prueba', markersize=8, linestyle='None'),
@@ -225,7 +209,6 @@
         ]
         ax.legend(handles=legend_elements, loc='upper right', fontsize=8)
 
-        # Conectar evento y iniciar animación
         fig.canvas.mpl_connect('button_press_event', on_click)
         ani = FuncAnimation(fig, actualizar, interval=40, blit=False)
         
